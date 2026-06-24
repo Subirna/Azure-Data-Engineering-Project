@@ -1,0 +1,191 @@
+{
+  "name": "pl_ingest_traffic_data",
+  "properties": {
+    "description": "Ingests UK road traffic count data from DfT API into Bronze layer",
+    "activities": [
+      {
+        "name": "Fetch Count Points",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_traffic_api_source",
+            "type": "DatasetReference",
+            "parameters": {
+              "relativeUrl": "/count-points"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_adls_sink",
+            "type": "DatasetReference",
+            "parameters": {
+              "containerName": "bronze",
+              "folderPath": "traffic/count_points"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Fetch Traffic Counts",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Fetch Count Points",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 60
+        },
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_traffic_api_source",
+            "type": "DatasetReference",
+            "parameters": {
+              "relativeUrl": "/counts"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_adls_sink",
+            "type": "DatasetReference",
+            "parameters": {
+              "containerName": "bronze",
+              "folderPath": "traffic/counts"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Fetch Regions",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_traffic_api_source",
+            "type": "DatasetReference",
+            "parameters": {
+              "relativeUrl": "/regions"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_adls_sink",
+            "type": "DatasetReference",
+            "parameters": {
+              "containerName": "bronze",
+              "folderPath": "traffic/regions"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Fetch Local Authorities",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "HttpReadSettings",
+              "requestMethod": "GET"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_traffic_api_source",
+            "type": "DatasetReference",
+            "parameters": {
+              "relativeUrl": "/local-authorities"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_adls_sink",
+            "type": "DatasetReference",
+            "parameters": {
+              "containerName": "bronze",
+              "folderPath": "traffic/local_authorities"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": ["traffic", "ingestion", "bronze"],
+    "folder": { "name": "Ingestion" }
+  }
+}

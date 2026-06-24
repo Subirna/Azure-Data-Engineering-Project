@@ -1,0 +1,107 @@
+{
+  "name": "pl_master_pipeline",
+  "properties": {
+    "description": "Master orchestration pipeline that runs all ingestion and triggers Databricks transformation",
+    "activities": [
+      {
+        "name": "Ingest Traffic Data",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "pl_ingest_traffic_data",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Ingest Accident Data",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "pl_ingest_accident_data",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Transform Bronze to Silver",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Ingest Traffic Data",
+            "dependencyConditions": ["Succeeded"]
+          },
+          {
+            "activity": "Ingest Accident Data",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_azure_databricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/uk-traffic-intelligence/02_silver/transform_traffic_data"
+        }
+      },
+      {
+        "name": "Transform Silver to Gold - Traffic",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Transform Bronze to Silver",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_azure_databricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/uk-traffic-intelligence/03_gold/dm_traffic_analysis"
+        }
+      },
+      {
+        "name": "Transform Silver to Gold - Safety",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Transform Bronze to Silver",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_azure_databricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/uk-traffic-intelligence/03_gold/dm_road_safety"
+        }
+      },
+      {
+        "name": "Transform Silver to Gold - Environment",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Transform Bronze to Silver",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_azure_databricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/uk-traffic-intelligence/03_gold/dm_environmental_impact"
+        }
+      }
+    ],
+    "annotations": ["master", "orchestration"],
+    "folder": { "name": "Orchestration" }
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

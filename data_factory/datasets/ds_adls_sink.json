@@ -1,0 +1,27 @@
+{
+  "name": "ds_adls_sink",
+  "properties": {
+    "type": "Parquet",
+    "linkedServiceName": {
+      "referenceName": "ls_adls_gen2",
+      "type": "LinkedServiceReference"
+    },
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobFSLocation",
+        "folderPath": {
+          "value": "@concat(dataset().containerName, '/', dataset().folderPath, '/', formatDateTime(utcNow(), 'yyyy/MM/dd'))",
+          "type": "Expression"
+        },
+        "fileSystem": "bronze"
+      },
+      "compressionCodec": "snappy"
+    },
+    "parameters": {
+      "containerName": { "type": "String" },
+      "folderPath": { "type": "String" }
+    },
+    "annotations": [],
+    "description": "Sink dataset for writing to ADLS Gen2 Bronze layer in Parquet format"
+  }
+}

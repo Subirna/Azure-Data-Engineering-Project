@@ -1,0 +1,14 @@
+{
+  "name": "ls_http_uk_gov_api",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "type": "HttpServer",
+    "typeProperties": {
+      "url": "https://roadtraffic.dft.gov.uk/api",
+      "enableServerCertificateValidation": true,
+      "authenticationType": "Anonymous"
+    },
+    "annotations": [],
+    "description": "UK Department for Transport Road Traffic API"
+  }
+}

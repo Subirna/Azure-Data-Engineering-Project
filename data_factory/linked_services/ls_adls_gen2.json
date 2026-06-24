@@ -1,0 +1,16 @@
+{
+  "name": "ls_adls_gen2",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "type": "AzureBlobFS",
+    "typeProperties": {
+      "url": "https://uktrafficdldev.dfs.core.windows.net"
+    },
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    },
+    "annotations": [],
+    "description": "Azure Data Lake Storage Gen2 for UK Traffic Data"
+  }
+}

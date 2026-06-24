@@ -1,0 +1,56 @@
+project:
+  name: "uk-traffic-intelligence"
+  environment: "dev"
+
+data_sources:
+  traffic_counts:
+    base_url: "https://roadtraffic.dft.gov.uk/api"
+    endpoints:
+      counts: "/counts"
+      count_points: "/count-points"
+      regions: "/regions"
+      local_authorities: "/local-authorities"
+    format: "json"
+    schedule: "weekly"
+
+  accidents:
+    base_url: "https://data.dft.gov.uk"
+    files:
+      - "dft-road-casualty-statistics-collision-2023.csv"
+      - "dft-road-casualty-statistics-vehicle-2023.csv"
+      - "dft-road-casualty-statistics-casualty-2023.csv"
+    format: "csv"
+    schedule: "monthly"
+
+  air_quality:
+    base_url: "https://uk-air.defra.gov.uk/sos-ukair/api/v1"
+    endpoints:
+      stations: "/stations"
+      timeseries: "/timeseries"
+    format: "json"
+    schedule: "hourly"
+
+  carbon_intensity:
+    base_url: "https://api.carbonintensity.org.uk"
+    endpoints:
+      national: "/intensity"
+      regional: "/regional"
+    format: "json"
+    schedule: "every_30_min"
+
+storage:
+  storage_account: "uktrafficdatalake"
+  container: "raw-data"
+  bronze_path: "bronze/"
+  silver_path: "silver/"
+  gold_path: "gold/"
+
+databricks:
+  workspace_url: ""
+  cluster_name: "uk-traffic-etl"
+  notebook_path: "/Shared/uk-traffic-intelligence"
+
+synapse:
+  workspace_name: "uk-traffic-synapse"
+  sql_pool: "traffic_dwh"
+  database: "uk_traffic_db"

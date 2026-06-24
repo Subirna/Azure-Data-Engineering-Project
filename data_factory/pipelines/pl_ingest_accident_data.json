@@ -1,0 +1,78 @@
+{
+  "name": "pl_ingest_accident_data",
+  "properties": {
+    "description": "Ingests UK STATS19 road accident data into Bronze layer",
+    "parameters": {
+      "fileList": {
+        "type": "Array",
+        "defaultValue": [
+          "dft-road-casualty-statistics-collision-2023.csv",
+          "dft-road-casualty-statistics-vehicle-2023.csv",
+          "dft-road-casualty-statistics-casualty-2023.csv"
+        ]
+      }
+    },
+    "activities": [
+      {
+        "name": "ForEach Accident File",
+        "type": "ForEach",
+        "dependsOn": [],
+        "typeProperties": {
+          "items": {
+            "value": "@pipeline().parameters.fileList",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 3,
+          "activities": [
+            {
+              "name": "Copy Accident File",
+              "type": "Copy",
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 3,
+                "retryIntervalInSeconds": 30
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "DelimitedTextSource",
+                  "storeSettings": {
+                    "type": "HttpReadSettings",
+                    "requestMethod": "GET"
+                  }
+                },
+                "sink": {
+                  "type": "ParquetSink",
+                  "storeSettings": {
+                    "type": "AzureBlobFSWriteSettings"
+                  }
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "ds_accident_csv_source",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "fileName": "@item()"
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "ds_adls_sink",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "containerName": "bronze",
+                    "folderPath": "@concat('accidents/', replace(item(), '.csv', ''))"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": ["accidents", "ingestion", "bronze"],
+    "folder": { "name": "Ingestion" }
+  }
+}

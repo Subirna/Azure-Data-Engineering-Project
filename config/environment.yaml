@@ -1,0 +1,26 @@
+environments:
+  dev:
+    resource_group: "rg-uk-traffic-dev"
+    location: "uksouth"
+    storage_account: "uktrafficdldev"
+    data_factory: "adf-uk-traffic-dev"
+    databricks_workspace: "dbw-uk-traffic-dev"
+    synapse_workspace: "syn-uk-traffic-dev"
+    key_vault: "kv-uk-traffic-dev"
+    tags:
+      environment: "dev"
+      project: "uk-traffic-intelligence"
+      owner: "data-engineering"
+
+  prod:
+    resource_group: "rg-uk-traffic-prod"
+    location: "uksouth"
+    storage_account: "uktrafficdlprod"
+    data_factory: "adf-uk-traffic-prod"
+    databricks_workspace: "dbw-uk-traffic-prod"
+    synapse_workspace: "syn-uk-traffic-prod"
+    key_vault: "kv-uk-traffic-prod"
+    tags:
+      environment: "prod"
+      project: "uk-traffic-intelligence"
+      owner: "data-engineering"

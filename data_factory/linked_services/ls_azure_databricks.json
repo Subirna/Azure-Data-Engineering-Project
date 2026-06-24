@@ -1,0 +1,22 @@
+{
+  "name": "ls_azure_databricks",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": "https://adb-xxxxxxxxxxxx.azuredatabricks.net",
+      "authentication": "MSI",
+      "workspaceResourceId": "/subscriptions/{subscription-id}/resourceGroups/rg-uk-traffic-dev/providers/Microsoft.Databricks/workspaces/dbw-uk-traffic-dev",
+      "existingClusterId": "",
+      "newClusterVersion": "14.3.x-scala2.12",
+      "newClusterNumOfWorker": "1:4",
+      "newClusterNodeType": "Standard_DS3_v2",
+      "newClusterSparkEnvVars": {
+        "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
+      },
+      "newClusterInitScripts": []
+    },
+    "annotations": [],
+    "description": "Azure Databricks for ETL transformations"
+  }
+}

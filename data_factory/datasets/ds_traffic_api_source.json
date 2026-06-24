@@ -1,0 +1,26 @@
+{
+  "name": "ds_traffic_api_source",
+  "properties": {
+    "type": "Json",
+    "linkedServiceName": {
+      "referenceName": "ls_http_uk_gov_api",
+      "type": "LinkedServiceReference"
+    },
+    "typeProperties": {
+      "location": {
+        "type": "HttpServerLocation",
+        "relativeUrl": {
+          "value": "@dataset().relativeUrl",
+          "type": "Expression"
+        }
+      }
+    },
+    "parameters": {
+      "relativeUrl": {
+        "type": "String"
+      }
+    },
+    "annotations": [],
+    "description": "Source dataset for UK DfT Road Traffic API endpoints"
+  }
+}
