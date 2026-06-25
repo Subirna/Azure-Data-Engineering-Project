@@ -81,7 +81,7 @@
             "referenceName": "ds_traffic_api_source",
             "type": "DatasetReference",
             "parameters": {
-              "relativeUrl": "/counts"
+              "relativeUrl": "/average-annual-daily-flow?limit=50000"
             }
           }
         ],

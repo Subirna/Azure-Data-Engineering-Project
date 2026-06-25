@@ -31,3 +31,6 @@ Thumbs.db
 credentials.json
 *.pem
 *.key
+
+# Notebooks with secrets (use sanitized version instead)
+01_mount_storages.ipynb
