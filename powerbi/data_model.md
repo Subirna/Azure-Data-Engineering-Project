@@ -8,6 +8,129 @@
 
 ---
 
+## Source Tables (Bronze Layer — Raw from UK DfT API)
+
+### Source: UK Department for Transport — Road Traffic Statistics
+**Base URL:** `https://roadtraffic.dft.gov.uk/api`
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         SOURCE TABLES (RAW API DATA)                        ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                             ║
+║  ┌─────────────────────────────┐     ┌──────────────────────────────────┐   ║
+║  │  regions                    │     │  local_authorities               │   ║
+║  │  (Reference Table)          │     │  (Reference Table)               │   ║
+║  │  API: /api/regions          │     │  API: /api/local-authorities     │   ║
+║  │  Rows: 11                   │     │  Rows: 214                       │   ║
+║  ├─────────────────────────────┤     ├──────────────────────────────────┤   ║
+║  │ PK  id          INT        │     │ PK  id              INT         │   ║
+║  │     name        STRING     │◄────│ FK  region_id       INT         │   ║
+║  │     slug        STRING     │     │     name            STRING      │   ║
+║  └─────────────────────────────┘     │     slug            STRING      │   ║
+║           │                          │     ita_id          INT         │   ║
+║           │ 1:M                      └──────────────────────────────────┘   ║
+║           │                                    │                            ║
+║           │                                    │ 1:M                        ║
+║           ▼                                    ▼                            ║
+║  ┌──────────────────────────────────────────────────────────────────────┐   ║
+║  │  count_points                                                        │   ║
+║  │  (Reference Table — Physical Traffic Counting Locations)             │   ║
+║  │  API: /api/count-points (paginated, 46,754 rows)                     │   ║
+║  ├──────────────────────────────────────────────────────────────────────┤   ║
+║  │ PK  count_point_id       INT       Unique ID for counting location  │   ║
+║  │ FK  region_id            INT       Links to regions.id              │   ║
+║  │ FK  local_authority_id   INT       Links to local_authorities.id    │   ║
+║  │     road_name            STRING    Road identifier (e.g. A3111, M4) │   ║
+║  │     road_category        STRING    PA, TM, TA, M                    │   ║
+║  │     road_type            STRING    Major / Minor                     │   ║
+║  │     start_junction       STRING    Start junction description        │   ║
+║  │     end_junction         STRING    End junction description          │   ║
+║  │     easting              INT       OS grid easting                   │   ║
+║  │     northing             INT       OS grid northing                  │   ║
+║  │     latitude             DOUBLE    GPS latitude                      │   ║
+║  │     longitude            DOUBLE    GPS longitude                     │   ║
+║  │     link_length_km       DOUBLE    Road link length in km            │   ║
+║  │     link_length_miles    DOUBLE    Road link length in miles         │   ║
+║  └──────────────────────────────────────────────────────────────────────┘   ║
+║           │                                                                  ║
+║           │ 1:M (one count point has many yearly readings)                   ║
+║           ▼                                                                  ║
+║  ┌──────────────────────────────────────────────────────────────────────┐   ║
+║  │  traffic_counts (Average Annual Daily Flow — AADF)                   │   ║
+║  │  (MAIN FACT TABLE — Vehicle Counts by Year)                          │   ║
+║  │  API: /api/average-annual-daily-flow (paginated, 600,750 rows)       │   ║
+║  ├──────────────────────────────────────────────────────────────────────┤   ║
+║  │ PK  id                        INT       Unique record ID             │   ║
+║  │ FK  count_point_id            INT       Links to count_points        │   ║
+║  │ FK  region_id                 INT       Links to regions.id          │   ║
+║  │ FK  local_authority_id        INT       Links to local_authorities   │   ║
+║  │     year                      INT       Survey year (2000-2025)      │   ║
+║  │     road_name                 STRING    Road identifier              │   ║
+║  │     road_category             STRING    PA, TM, TA, M                │   ║
+║  │     road_type                 STRING    Major / Minor                │   ║
+║  │     link_length_km            DOUBLE    Road link length             │   ║
+║  │     estimation_method         STRING    Counted / Estimated          │   ║
+║  │     estimation_method_detailed STRING   Detailed method description  │   ║
+║  │     latitude                  DOUBLE    GPS latitude                 │   ║
+║  │     longitude                 DOUBLE    GPS longitude                │   ║
+║  │     easting                   INT       OS grid easting              │   ║
+║  │     northing                  INT       OS grid northing             │   ║
+║  │  ── Vehicle Type Counts (Annual Average Daily Flow) ──               │   ║
+║  │     pedal_cycles              INT       Bicycles per day             │   ║
+║  │     two_wheeled_motor_vehicles INT      Motorcycles per day          │   ║
+║  │     cars_and_taxis            INT       Cars & taxis per day         │   ║
+║  │     buses_and_coaches         INT       Buses per day                │   ║
+║  │     lgvs                      INT       Light goods vehicles/day     │   ║
+║  │     hgvs_2_rigid_axle         INT       HGV 2-axle rigid per day    │   ║
+║  │     hgvs_3_rigid_axle         INT       HGV 3-axle rigid per day    │   ║
+║  │     hgvs_4_or_more_rigid_axle INT       HGV 4+ axle rigid per day   │   ║
+║  │     hgvs_3_or_4_articulated   INT       HGV 3-4 axle artic per day  │   ║
+║  │     hgvs_5_articulated_axle   INT       HGV 5-axle artic per day    │   ║
+║  │     hgvs_6_articulated_axle   INT       HGV 6-axle artic per day    │   ║
+║  │     all_hgvs                  INT       Total HGVs per day           │   ║
+║  │     all_motor_vehicles        INT       Total motor vehicles per day │   ║
+║  └──────────────────────────────────────────────────────────────────────┘   ║
+║                                                                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Source to Gold Data Lineage
+
+```
+SOURCE (Bronze)                    SILVER                    GOLD
+───────────────                    ──────                    ────
+
+regions (11 rows)          →   regions/ (cleansed)     ─┐
+  • id, name                                             │
+                                                         ├──► fact_traffic_summary (80 rows)
+local_authorities (214)    →   local_authorities/      │     • region_name, road_type, year
+  • id, name, region_id                                 │     • total_cars, total_hgvs, yoy_change_pct
+                                                         │
+count_points (46,754)      →   count_points/           ├──► fact_co2_emissions (80 rows)
+  • count_point_id, lat,                                │     • region_name, year, total_co2_tonnes
+    lon, road_name                                      │
+                                                         ├──► fact_vehicle_mix (80 rows)
+traffic_counts (600,750)   →   counts/ (600,750)       │     • region_name, year, green_transport_index
+  • All vehicle type counts     • Type-cast to INT      │
+  • year, region_id             • UK coordinate filter  ├──► fact_road_analysis (174 rows)
+  • latitude, longitude         • Derived: total_       │     • road_class, vehicles_per_km
+                                  vehicles, hgv_pct     │
+                                                         ├──► fact_covid_impact (28 rows)
+                                                         │     • recovery_pct vs 2019 baseline
+                                                         │
+                                                         ├──► fact_busiest_roads (12 rows)
+                                                         │     • Top roads ranked by total_vehicles
+                                                         │
+                                                         ├──► dim_location (12 rows)
+                                                         │     • count_point_id, lat, lon, region
+                                                         │
+                                                         └──► dim_date (9,497 rows)
+                                                               • Generated: 2000-01-01 to 2025-12-31
+```
+
+---
+
 ## Entity Relationship Diagram (ERD)
 
 ```
