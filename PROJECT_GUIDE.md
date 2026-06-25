@@ -416,4 +416,174 @@ CO2 Per Vehicle = DIVIDE(SUM([total_co2_tonnes]) * 1000, SUM([total_vehicle_coun
 | 7 | Synapse SQL Layer | Pending |
 | 8 | Power BI Dashboard | Pending |
 
-**Current Step:** Running Bronze ingestion notebook in Databricks (Cell 2 — fetching 600K+ traffic records)
+**Current Step:** Project complete — ADF pipeline orchestration pending
+
+---
+
+## PHASE 5: Databricks — Silver Layer (Done)
+
+### Notebook: `03_silver_transform.py`
+
+**Transformations applied:**
+- Cast all string columns to proper types (IntegerType, DoubleType)
+- Standardize text (UPPER road names, InitCap region names)
+- Filter UK coordinates (lat 49-61, lon -8 to 2)
+- Remove duplicates
+- Add derived columns: total_vehicles, hgv_percentage
+- Add _processed_timestamp
+
+**Output:** `abfss://silver@subiradls2026.dfs.core.windows.net/traffic/`
+- counts/ (600,750 rows)
+- count_points/ (250 rows)
+- regions/ (11 rows)
+- local_authorities/ (214 rows)
+
+---
+
+## PHASE 6: Databricks — Gold Layer (Done)
+
+### Notebook: `04_gold_transform.py`
+
+**IMPORTANT:** Gold tables are written WITHOUT `.partitionBy("year")` to preserve
+the year column in the Parquet schema. Using partitionBy removes the column from
+the data and stores it only in the folder structure, which Synapse/Power BI cannot read.
+
+**8 Gold Tables Created:**
+
+| Table | Rows | Type | Key Columns |
+|-------|------|------|-------------|
+| fact_traffic_summary | 80 | Fact | year, region_name, road_type, total_all_vehicles, yoy_change_pct |
+| fact_co2_emissions | 80 | Fact | year, region_name, total_co2_tonnes, co2_per_vehicle_kg |
+| fact_vehicle_mix | 80 | Fact | year, region_name, cars, hgvs, green_transport_index |
+| fact_road_analysis | 174 | Fact | year, region_name, road_class, vehicles_per_km |
+| fact_covid_impact | 28 | Fact | year, region_name, recovery_pct, baseline_2019 |
+| fact_busiest_roads | 12 | Fact | region_name, road_name, total_vehicles, rank |
+| dim_location | 12 | Dimension | count_point_id, latitude, longitude, region_name |
+| dim_date | 9,497 | Dimension | year, month, quarter, day_name |
+
+**COVID Impact Fix:** The baseline_2019 calculation uses a JOIN approach
+(not window function) to correctly populate the 2019 baseline values.
+
+**Output:** `abfss://gold@subiradls2026.dfs.core.windows.net/`
+
+---
+
+## PHASE 7: Synapse SQL Layer (Done)
+
+### File: `synapse/sql_scripts/synapse_complete_setup.sql`
+
+**Setup Steps:**
+1. Create database: `uk_traffic_db`
+2. Create master key
+3. Create SAS credential + external data source
+4. Create 8 views on Gold tables
+5. Test all views
+
+**Key Fix:** When Gold tables are updated in Databricks, views must be
+dropped and recreated in Synapse to pick up schema changes.
+
+**Connection Details for Power BI:**
+- Server: `syn-bd-training-uk-ondemand.sql.azuresynapse.net`
+- Database: `uk_traffic_db`
+- Authentication: Organizational account
+
+---
+
+## PHASE 8: Power BI Dashboard (Done)
+
+### File: `Dash_board.pbix`
+
+**Dashboard: UK Road Traffic Intelligence Dashboard (1 page executive summary)**
+
+**Slicers (2):**
+- Year dropdown (from vw_dim_date)
+- Region dropdown (from vw_traffic_summary)
+
+**KPI Cards (4):**
+| Card | Table | Field | Aggregation |
+|------|-------|-------|-------------|
+| Total Vehicles | vw_traffic_summary | total_all_vehicles | Sum |
+| Total CO2 Tonnes | vw_co2_emissions | total_co2_tonnes | Sum |
+| Green Transport Index | vw_vehicle_mix | green_transport_index | Average |
+| COVID Recovery % | vw_covid_impact | recovery_pct | Average |
+
+**Charts (4):**
+| Chart | Type | Table | X-axis | Y-axis | Legend |
+|-------|------|-------|--------|--------|--------|
+| Traffic Trend | Line | vw_vehicle_mix | year | total | region_name |
+| Vehicle Mix | Donut | vw_vehicle_mix | — | cars, hgvs, lgvs, buses, cycles | — |
+| CO2 by Region | Bar | vw_co2_emissions | total_co2_tonnes | region_name | — |
+| Green Index | Line | vw_vehicle_mix | year | green_transport_index | region_name |
+
+**Data Model (Star Schema):**
+```
+              vw_dim_date (year)
+                    │
+     ┌──────────────┼──────────────────┐──────────────┐
+     ▼              ▼                  ▼              ▼
+vw_traffic    vw_co2_         vw_vehicle    vw_covid_
+_summary      emissions       _mix          impact
+```
+
+All relationships: `vw_dim_date (year)` → each fact table `(year)`
+
+**Theme:** Dark theme applied
+
+---
+
+## PHASE 9: ADF Master Pipeline (Pending)
+
+### Pipeline: `pl_master_orchestration`
+
+**Flow:**
+```
+01_Setup_Config → 03_Silver_Transform → 04_Gold_Transform
+```
+
+**Activities (Databricks Notebook type):**
+| Activity | Notebook Path | Purpose |
+|----------|--------------|---------|
+| 01_Setup_Config | /01_setup_config | Configure ADLS storage key |
+| 03_Silver_Transform | /03_silver_transform | Cleanse Bronze → Silver |
+| 04_Gold_Transform | /04_gold_transform | Aggregate Silver → Gold |
+
+**Note:** 02_bronze_ingestion is NOT in the pipeline because:
+- Data is already loaded (600K+ rows)
+- It takes 30+ minutes
+- Run manually when fresh data is needed
+
+---
+
+## Troubleshooting Notes (Updated)
+
+### Gold Layer Issues
+- `.partitionBy("year")` removes year from Parquet schema → DON'T use it
+- After updating Gold tables in Databricks, DROP and CREATE views in Synapse
+- COVID baseline_2019 uses JOIN approach, not window function
+
+### Power BI Issues
+- "Cyclic reference" → Delete all region_name relationships, keep only year
+- Year column missing → Recreate Synapse views after Gold table update
+- Data not refreshing → Delete table in Power Query Editor → re-add from source
+- Slicer dropdown → Use classic Slicer (not new List Slicer)
+
+### Synapse Issues
+- "Content of directory cannot be listed" → Create SAS token credential
+- "Cannot drop credential" → Drop data source first, then credential
+- Schema cache → Drop and recreate views after Gold updates
+
+---
+
+## Progress Tracker
+
+| Phase | Description | Status |
+|-------|------------|--------|
+| 1 | Azure Infrastructure | Done |
+| 2 | ADF Linked Services & Datasets | Done |
+| 3 | ADF Ingestion Pipeline | Done |
+| 4 | Databricks Bronze Ingestion | Done |
+| 5 | Databricks Silver Transformation | Done |
+| 6 | Databricks Gold Transformation | Done |
+| 7 | Synapse SQL Layer | Done |
+| 8 | Power BI Dashboard | Done |
+| 9 | ADF Master Pipeline | Pending |
