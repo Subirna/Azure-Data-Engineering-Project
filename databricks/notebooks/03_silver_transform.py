@@ -1,22 +1,34 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 03 - Silver Layer Transformation
-# MAGIC Cleanses, type-casts, and standardizes Bronze data.
-# MAGIC Run 01_setup_config FIRST.
+# MAGIC Cleanses, type-casts, and standardizes Bronze data into Silver layer.
+# MAGIC
+# MAGIC **Run 01_setup_config FIRST** (or run Cell 1 below for storage key).
+
+# COMMAND ----------
+
+# Storage config (in case 01_setup_config was not run)
+storage_account = "subiradls2026"
+storage_key = "<PASTE_YOUR_KEY_IN_DATABRICKS>"
+
+spark.conf.set(
+    f"fs.azure.account.key.{storage_account}.dfs.core.windows.net",
+    storage_key
+)
 
 # COMMAND ----------
 
 from pyspark.sql import functions as F
 from pyspark.sql.types import IntegerType, DoubleType
 
-storage_account = "subiradls2026"
 BRONZE_PATH = f"abfss://bronze@{storage_account}.dfs.core.windows.net/traffic"
 SILVER_PATH = f"abfss://silver@{storage_account}.dfs.core.windows.net/traffic"
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Silver: Traffic Counts (600K+ rows)
+# MAGIC ## Silver: Traffic Counts (602,250+ rows)
+# MAGIC Type-cast strings to proper types, add derived columns, filter UK coordinates.
 
 # COMMAND ----------
 
@@ -54,6 +66,7 @@ df_counts_silver = df_counts \
 
 df_counts_silver.write.mode("overwrite").parquet(f"{SILVER_PATH}/counts/")
 print(f"Silver Counts: {df_counts_silver.count()} rows")
+print(f"Unique regions: {df_counts_silver.select('region_id').distinct().count()}")
 
 # COMMAND ----------
 
@@ -115,7 +128,12 @@ print(f"Silver Local Authorities: {df_la_silver.count()} rows")
 
 # COMMAND ----------
 
-print("\n=== SILVER LAYER COMPLETE ===")
+# MAGIC %md
+# MAGIC ## Verify Silver Layer
+
+# COMMAND ----------
+
+print("=== SILVER LAYER COMPLETE ===\n")
 for folder in ["counts", "count_points", "regions", "local_authorities"]:
     df = spark.read.parquet(f"{SILVER_PATH}/{folder}/")
     print(f"  {folder}: {df.count()} rows, {len(df.columns)} columns")
