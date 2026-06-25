@@ -1,0 +1,55 @@
+{
+    "name": "UK Energy Intelligence Dark",
+    "dataColors": [
+        "#00D4AA",
+        "#FF6B6B",
+        "#4ECDC4",
+        "#FFE66D",
+        "#A78BFA",
+        "#F97316",
+        "#06B6D4",
+        "#EC4899",
+        "#84CC16",
+        "#8B5CF6"
+    ],
+    "background": "#0F172A",
+    "foreground": "#E2E8F0",
+    "tableAccent": "#00D4AA",
+    "visualStyles": {
+        "*": {
+            "*": {
+                "background": [{"color": {"solid": {"color": "#1E293B"}}}],
+                "border": [{"color": {"solid": {"color": "#334155"}}, "show": true}],
+                "title": [{
+                    "show": true,
+                    "fontColor": {"solid": {"color": "#E2E8F0"}},
+                    "fontSize": 12,
+                    "bold": true
+                }],
+                "labels": [{"color": {"solid": {"color": "#94A3B8"}}}]
+            }
+        },
+        "page": {
+            "*": {
+                "background": [{"color": {"solid": {"color": "#0F172A"}}, "transparency": 0}]
+            }
+        },
+        "card": {
+            "*": {
+                "background": [{"color": {"solid": {"color": "#1E293B"}}}],
+                "categoryLabel": [{"color": {"solid": {"color": "#94A3B8"}}, "fontSize": 10}],
+                "wordWrap": [{"show": true}]
+            }
+        },
+        "slicer": {
+            "*": {
+                "background": [{"color": {"solid": {"color": "#1E293B"}}}]
+            }
+        },
+        "textbox": {
+            "*": {
+                "background": [{"color": {"solid": {"color": "#0F172A"}}, "transparency": 100}]
+            }
+        }
+    }
+}

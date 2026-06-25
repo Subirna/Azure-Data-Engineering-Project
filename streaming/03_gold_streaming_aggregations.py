@@ -1,8 +1,8 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Streaming — Gold Layer Aggregations
-# MAGIC Creates aggregated Gold tables from Silver streaming data for Power BI.
-# MAGIC Run this AFTER 02_databricks_streaming_bronze_silver has been running for a few minutes.
+# MAGIC Creates 5 aggregated Gold tables from Silver streaming data for Power BI.
+# MAGIC Run this AFTER 02_databricks_streaming_bronze_silver has processed events.
 
 # COMMAND ----------
 
@@ -22,9 +22,9 @@ from pyspark.sql import functions as F
 SILVER_PATH = f"abfss://silver@{storage_account}.dfs.core.windows.net/streaming/carbon_intensity"
 GOLD_PATH = f"abfss://gold@{storage_account}.dfs.core.windows.net/streaming"
 
-# Read Silver data
 df_silver = spark.read.parquet(f"{SILVER_PATH}/")
 print(f"Silver streaming records: {df_silver.count()}")
+df_silver.groupBy("event_type").count().show()
 
 # COMMAND ----------
 
@@ -35,12 +35,8 @@ print(f"Silver streaming records: {df_silver.count()}")
 
 gold_national = df_silver \
     .filter(F.col("event_type") == "national_intensity") \
-    .select(
-        "data_timestamp", "period_from", "period_to",
-        "forecast", "actual", "intensity_index"
-    ) \
-    .withColumn("forecast_vs_actual",
-        F.round(F.col("actual") - F.col("forecast"), 2)) \
+    .select("data_timestamp", "period_from", "period_to", "forecast", "actual", "intensity_index") \
+    .withColumn("forecast_vs_actual", F.round(F.col("actual") - F.col("forecast"), 2)) \
     .withColumn("intensity_category",
         F.when(F.col("actual") <= 50, "Very Low")
         .when(F.col("actual") <= 100, "Low")
@@ -61,10 +57,7 @@ print(f"gold_national_intensity: {gold_national.count()} rows")
 
 gold_generation = df_silver \
     .filter(F.col("event_type") == "generation_mix") \
-    .select(
-        "data_timestamp", "period_from", "period_to",
-        "fuel_type", "fuel_percentage"
-    ) \
+    .select("data_timestamp", "period_from", "period_to", "fuel_type", "fuel_percentage") \
     .withColumn("energy_category",
         F.when(F.col("fuel_type").isin("wind", "solar", "hydro"), "Renewable")
         .when(F.col("fuel_type") == "nuclear", "Nuclear")
@@ -84,11 +77,7 @@ print(f"gold_generation_mix: {gold_generation.count()} rows")
 
 gold_regional = df_silver \
     .filter(F.col("event_type") == "regional_intensity") \
-    .select(
-        "data_timestamp", "period_from", "period_to",
-        "region_id", "region_name", "dno_region",
-        "forecast", "intensity_index"
-    ) \
+    .select("data_timestamp", "period_from", "period_to", "region_id", "region_name", "dno_region", "forecast", "intensity_index") \
     .withColumn("intensity_category",
         F.when(F.col("forecast") <= 50, "Very Low")
         .when(F.col("forecast") <= 100, "Low")
@@ -109,11 +98,7 @@ print(f"gold_regional_intensity: {gold_regional.count()} rows")
 
 gold_regional_gen = df_silver \
     .filter(F.col("event_type") == "regional_generation") \
-    .select(
-        "data_timestamp", "period_from",
-        "region_id", "region_name",
-        "fuel_type", "fuel_percentage"
-    ) \
+    .select("data_timestamp", "period_from", "region_id", "region_name", "fuel_type", "fuel_percentage") \
     .withColumn("energy_category",
         F.when(F.col("fuel_type").isin("wind", "solar", "hydro"), "Renewable")
         .when(F.col("fuel_type") == "nuclear", "Nuclear")
@@ -152,7 +137,7 @@ print(f"gold_renewable_summary: {gold_renewable.count()} rows")
 
 # COMMAND ----------
 
-print("=== STREAMING GOLD TABLES COMPLETE ===\n")
+print("=== STREAMING GOLD COMPLETE ===\n")
 for t in ["gold_national_intensity", "gold_generation_mix", "gold_regional_intensity",
           "gold_regional_generation", "gold_renewable_summary"]:
     df = spark.read.parquet(f"{GOLD_PATH}/{t}/")

@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 # Configuration
-EVENT_HUB_CONNECTION_STRING = "<PASTE_YOUR_EVENT_HUB_CONNECTION_STRING>"
+EVENT_HUB_CONNECTION_STRING = "<PASTE_EVENT_HUB_CONNECTION_STRING: Azure Portal > eh-uk-traffic-subirna > Shared access policies > RootManageSharedAccessKey > Primary connection string>"
 EVENT_HUB_NAME = "carbon-intensity-stream"
 
 # API Endpoints

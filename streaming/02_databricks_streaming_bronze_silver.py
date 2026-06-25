@@ -1,13 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Streaming — Bronze & Silver Layer
-# MAGIC Reads real-time carbon intensity data from Azure Event Hub using Structured Streaming.
+# MAGIC Reads real-time carbon intensity data from Azure Event Hub using Python consumer.
 # MAGIC Writes to Bronze (raw) and Silver (cleansed) layers in ADLS Gen2.
 # MAGIC
 # MAGIC **Prerequisites:**
-# MAGIC - Event Hub namespace: eh-uk-traffic-subira
+# MAGIC - Event Hub namespace: eh-uk-traffic-subirna
 # MAGIC - Event Hub name: carbon-intensity-stream
 # MAGIC - Producer script running (01_producer_carbon_intensity.py)
+# MAGIC - Library installed: azure-eventhub (PyPI)
 
 # COMMAND ----------
 
@@ -21,76 +22,96 @@ spark.conf.set(
 )
 
 # Event Hub config
-EVENT_HUB_CONNECTION_STRING = "<PASTE_YOUR_EVENT_HUB_CONNECTION_STRING>"
+EVENT_HUB_CONNECTION_STRING = "<PASTE_EVENT_HUB_CONNECTION_STRING>"
 EVENT_HUB_NAME = "carbon-intensity-stream"
 
 BRONZE_PATH = f"abfss://bronze@{storage_account}.dfs.core.windows.net/streaming/carbon_intensity"
 SILVER_PATH = f"abfss://silver@{storage_account}.dfs.core.windows.net/streaming/carbon_intensity"
-CHECKPOINT_PATH = f"abfss://bronze@{storage_account}.dfs.core.windows.net/streaming/_checkpoints"
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Event Hub Connection Config
+# MAGIC ## Step 1: Consume Events from Event Hub → Save to Bronze
 
 # COMMAND ----------
 
-ehConf = {
-    "eventhubs.connectionString": sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(
-        f"{EVENT_HUB_CONNECTION_STRING};EntityPath={EVENT_HUB_NAME}"
-    ),
-    "eventhubs.consumerGroup": "$Default",
-    "eventhubs.startingPosition": '{"offset": "-1", "seqNo": -1, "enqueuedTime": null, "isInclusive": true}'
-}
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Bronze: Read Raw Stream from Event Hub
-
-# COMMAND ----------
-
+import json
+from azure.eventhub import EventHubConsumerClient
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
+from datetime import datetime
 
-# Read from Event Hub
-raw_stream = spark \
-    .readStream \
-    .format("eventhubs") \
-    .options(**ehConf) \
-    .load()
+# Collect events from Event Hub
+all_events = []
 
-# Parse the body (Event Hub sends bytes)
-bronze_stream = raw_stream \
-    .withColumn("body_str", F.col("body").cast(StringType())) \
-    .withColumn("enqueuedTime", F.col("enqueuedTime").cast("timestamp")) \
-    .select(
-        F.col("enqueuedTime").alias("event_time"),
-        F.col("body_str").alias("raw_json"),
-        F.col("partitionId").alias("partition_id"),
-        F.col("sequenceNumber").alias("sequence_number")
-    )
+def on_event(partition_context, event):
+    body = event.body_as_str()
+    all_events.append({
+        "raw_json": body,
+        "partition_id": partition_context.partition_id,
+        "enqueued_time": str(event.enqueued_time),
+        "sequence_number": event.sequence_number
+    })
+    partition_context.update_checkpoint(event)
 
-# Write Bronze (raw JSON) to ADLS
-bronze_query = bronze_stream \
-    .writeStream \
-    .format("parquet") \
-    .option("path", f"{BRONZE_PATH}/raw/") \
-    .option("checkpointLocation", f"{CHECKPOINT_PATH}/bronze/") \
-    .outputMode("append") \
-    .trigger(processingTime="30 seconds") \
-    .start()
+# Consumer reads from Event Hub
+consumer = EventHubConsumerClient.from_connection_string(
+    conn_str=EVENT_HUB_CONNECTION_STRING,
+    consumer_group="$Default",
+    eventhub_name=EVENT_HUB_NAME
+)
 
-print("Bronze streaming started...")
+print("Reading events from Event Hub (60 seconds)...")
+print("Make sure the producer script is running!")
+
+import threading
+
+def receive_events():
+    with consumer:
+        consumer.receive(
+            on_event=on_event,
+            starting_position="-1",
+            max_wait_time=60
+        )
+
+# Run consumer in background thread with timeout
+thread = threading.Thread(target=receive_events)
+thread.start()
+thread.join(timeout=65)
+
+print(f"\nReceived {len(all_events)} events from Event Hub")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Silver: Parse JSON and Cleanse
+# MAGIC ## Step 2: Save Raw Events to Bronze Layer
 
 # COMMAND ----------
 
-# Define schema for the carbon intensity JSON
+if len(all_events) > 0:
+    import pandas as pd
+
+    pdf_bronze = pd.DataFrame(all_events)
+    df_bronze = spark.createDataFrame(pdf_bronze)
+
+    df_bronze.write.mode("append").parquet(f"{BRONZE_PATH}/raw/")
+    print(f"Bronze: Saved {df_bronze.count()} raw events to ADLS")
+    df_bronze.show(5, truncate=False)
+else:
+    print("No events received! Make sure producer is running.")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Step 3: Parse JSON → Create Silver Layer
+
+# COMMAND ----------
+
+# Read all Bronze data
+df_bronze_all = spark.read.parquet(f"{BRONZE_PATH}/raw/")
+print(f"Total Bronze records: {df_bronze_all.count()}")
+
+# Define schema for parsing
 carbon_schema = StructType([
     StructField("event_type", StringType()),
     StructField("timestamp", StringType()),
@@ -106,15 +127,11 @@ carbon_schema = StructType([
     StructField("dno_region", StringType()),
 ])
 
-# Read Bronze stream and parse JSON
-silver_stream = spark \
-    .readStream \
-    .format("parquet") \
-    .schema(bronze_stream.schema) \
-    .load(f"{BRONZE_PATH}/raw/") \
+# Parse JSON and create Silver
+df_silver = df_bronze_all \
     .withColumn("parsed", F.from_json(F.col("raw_json"), carbon_schema)) \
     .select(
-        F.col("event_time"),
+        F.col("enqueued_time").cast("timestamp").alias("event_time"),
         F.col("parsed.event_type").alias("event_type"),
         F.col("parsed.timestamp").cast("timestamp").alias("data_timestamp"),
         F.col("parsed.from").alias("period_from"),
@@ -130,38 +147,40 @@ silver_stream = spark \
     ) \
     .withColumn("_processed_timestamp", F.current_timestamp())
 
-# Write Silver to ADLS
-silver_query = silver_stream \
-    .writeStream \
-    .format("parquet") \
-    .option("path", f"{SILVER_PATH}/") \
-    .option("checkpointLocation", f"{CHECKPOINT_PATH}/silver/") \
-    .outputMode("append") \
-    .trigger(processingTime="30 seconds") \
-    .partitionBy("event_type") \
-    .start()
+df_silver.write.mode("overwrite").partitionBy("event_type").parquet(f"{SILVER_PATH}/")
+print(f"Silver: Saved {df_silver.count()} parsed records")
 
-print("Silver streaming started...")
+# Show summary by event type
+df_silver.groupBy("event_type").count().show()
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Monitor Streams
+# MAGIC ## Step 4: Preview Silver Data
 
 # COMMAND ----------
 
-# Check active streams
-for stream in spark.streams.active:
-    print(f"Stream: {stream.name}, Status: {stream.status}")
+print("=== National Intensity ===")
+df_silver.filter(F.col("event_type") == "national_intensity").show(5, truncate=False)
+
+print("=== Generation Mix ===")
+df_silver.filter(F.col("event_type") == "generation_mix").show(5, truncate=False)
+
+print("=== Regional Intensity ===")
+df_silver.filter(F.col("event_type") == "regional_intensity").show(5, truncate=False)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Stop Streams (run when done)
+# MAGIC ## Step 5: Run Again to Accumulate More Data
+# MAGIC Re-run cells 3-4 (Event Hub consumer) every few minutes to pull new events.
+# MAGIC Each run appends to Bronze and overwrites Silver with all accumulated data.
+# MAGIC
+# MAGIC For continuous streaming, schedule this notebook to run every 5 minutes using ADF or Databricks Jobs.
 
 # COMMAND ----------
 
-# # Uncomment to stop all streams
-# for stream in spark.streams.active:
-#     stream.stop()
-# print("All streams stopped.")
+print("=== STREAMING BRONZE & SILVER COMPLETE ===")
+print(f"Bronze path: {BRONZE_PATH}/raw/")
+print(f"Silver path: {SILVER_PATH}/")
+print(f"Total events processed: {df_silver.count()}")
