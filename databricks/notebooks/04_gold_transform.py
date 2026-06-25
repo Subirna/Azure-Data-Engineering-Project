@@ -160,7 +160,7 @@ print(f"Gold fact_road_analysis: {fact_road.count()} rows")
 
 # COMMAND ----------
 
-fact_covid = df_counts_silver \
+covid_data = df_counts_silver \
     .join(df_regions.withColumnRenamed("id", "region_id").withColumnRenamed("name", "region_name"), "region_id") \
     .filter(F.col("year").between(2019, 2025)) \
     .groupBy("region_name", "road_type", "year") \
@@ -170,13 +170,15 @@ fact_covid = df_counts_silver \
         F.sum("all_hgvs").alias("total_hgvs")
     )
 
-window_covid = Window.partitionBy("region_name", "road_type").orderBy("year")
-baseline_2019 = Window.partitionBy("region_name", "road_type")
+# Get 2019 baseline as separate dataframe and join (avoids window function null issue)
+baseline = covid_data \
+    .filter(F.col("year") == 2019) \
+    .select("region_name", "road_type", F.col("total_vehicles").alias("baseline_2019"))
 
-fact_covid = fact_covid \
-    .withColumn("baseline_2019",
-        F.first(F.when(F.col("year") == 2019, F.col("total_vehicles"))).over(baseline_2019)
-    ) \
+window_covid = Window.partitionBy("region_name", "road_type").orderBy("year")
+
+fact_covid = covid_data \
+    .join(baseline, ["region_name", "road_type"], "left") \
     .withColumn("recovery_pct",
         F.round(F.col("total_vehicles") / F.col("baseline_2019") * 100, 2)
     ) \
