@@ -12,7 +12,7 @@
 
 # Storage config (in case 01_setup_config was not run)
 storage_account = "subiradls2026"
-storage_key = "<PASTE_YOUR_KEY_IN_DATABRICKS>"
+storage_key = "<PASTE_KEY_FROM_AZURE_PORTAL: subiradls2026 > Security + networking > Access keys > key1>"
 
 spark.conf.set(
     f"fs.azure.account.key.{storage_account}.dfs.core.windows.net",
