@@ -107,9 +107,12 @@ else:
 
 # COMMAND ----------
 
-# Read all Bronze data
+# Read ONLY the latest Bronze data (last 10 minutes)
 df_bronze_all = spark.read.parquet(f"{BRONZE_PATH}/raw/")
-print(f"Total Bronze records: {df_bronze_all.count()}")
+df_bronze_all = df_bronze_all \
+    .withColumn("enqueued_ts", F.col("enqueued_time").cast("timestamp")) \
+    .filter(F.col("enqueued_ts") >= F.current_timestamp() - F.expr("INTERVAL 10 MINUTES"))
+print(f"Latest Bronze records (last 10 min): {df_bronze_all.count()}")
 
 # Define schema for parsing
 carbon_schema = StructType([
