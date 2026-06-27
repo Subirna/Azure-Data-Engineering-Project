@@ -8,6 +8,96 @@
 
 ---
 
+## Source Data Model — Batch Processing
+
+```
+┌─────────────────────┐
+│     regions          │
+│     (11 rows)        │
+├─────────────────────┤
+│ PK  id              │
+│     name            │
+│     ons_code        │
+│     country_id      │
+└─────────┬───────────┘
+          │
+          │ 1:M (1 region → many local authorities)
+          ▼
+┌─────────────────────┐
+│ local_authorities    │
+│ (214 rows)           │
+├─────────────────────┤
+│ PK  id              │
+│ FK  region_id ──────┼──→ regions.id
+│     name            │
+│     ons_code        │
+└─────────┬───────────┘
+          │
+          │ 1:M (1 council → many count points)
+          ▼
+┌─────────────────────┐
+│ count_points         │
+│ (46,754 rows)        │
+├─────────────────────┤
+│ PK  count_point_id  │
+│ FK  region_id ──────┼──→ regions.id
+│ FK  local_authority_id──→ local_authorities.id
+│     road_name       │
+│     road_category   │
+│     latitude        │
+│     longitude       │
+│     link_length_km  │
+└─────────┬───────────┘
+          │
+          │ 1:M (1 count point → many yearly readings)
+          ▼
+┌──────────────────────────────────────────┐
+│ traffic_counts (AADF)                     │
+│ (602,250 rows — MAIN FACT TABLE)          │
+├──────────────────────────────────────────┤
+│ PK  id                                   │
+│ FK  count_point_id ──→ count_points      │
+│ FK  region_id ───────→ regions.id        │
+│ FK  local_authority_id→ local_authorities │
+│     year               (2000-2025)       │
+│     road_name          (A3111, M4)       │
+│     road_type          (Major/Minor)     │
+│     latitude, longitude                  │
+│  ── Vehicle Counts (per day) ──          │
+│     pedal_cycles       (bicycles)        │
+│     two_wheeled_motor  (motorcycles)     │
+│     cars_and_taxis     (cars)            │
+│     buses_and_coaches  (buses)           │
+│     lgvs               (vans)            │
+│     all_hgvs           (trucks)          │
+│     all_motor_vehicles (total)           │
+└──────────────────────────────────────────┘
+```
+
+### Source Relationships
+
+| From | To | Type | Meaning |
+|------|-----|------|---------|
+| regions.id | local_authorities.region_id | 1:M | 1 region → many councils |
+| regions.id | count_points.region_id | 1:M | 1 region → many sensors |
+| local_authorities.id | count_points.local_authority_id | 1:M | 1 council → many sensors |
+| count_points.count_point_id | traffic_counts.count_point_id | 1:M | 1 sensor → many yearly records |
+| regions.id | traffic_counts.region_id | 1:M | 1 region → many traffic records |
+
+### Real Example
+
+```
+Region: Wales (id: 4)
+  └── Local Auth: Newport (id: 6)
+        └── Count Point: 501 (M4 motorway, lat: 51.579)
+              ├── Year 2000: cars=837, hgvs=30, buses=25
+              ├── Year 2001: cars=857, hgvs=28, buses=27
+              ├── Year 2023: cars=950, hgvs=35, buses=20
+              └── ... (26 yearly records)
+```
+
+---
+
 ## Source Tables (Bronze Layer — Raw from UK DfT API)
 
 ### Source: UK Department for Transport — Road Traffic Statistics
