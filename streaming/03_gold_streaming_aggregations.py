@@ -23,10 +23,10 @@ SILVER_PATH = f"abfss://silver@{storage_account}.dfs.core.windows.net/streaming/
 GOLD_PATH = f"abfss://gold@{storage_account}.dfs.core.windows.net/streaming"
 
 df_silver = spark.read.parquet(f"{SILVER_PATH}/")
-# Use only latest data (last 10 minutes) for dashboard
-df_silver = df_silver \
-    .filter(F.col("data_timestamp") >= F.current_timestamp() - F.expr("INTERVAL 10 MINUTES"))
-print(f"Silver streaming records (last 10 min): {df_silver.count()}")
+# Use only latest cycle data for dashboard (no time-window dependency)
+latest_ts = df_silver.agg(F.max("data_timestamp")).collect()[0][0]
+df_silver = df_silver.filter(F.col("data_timestamp") == latest_ts)
+print(f"Silver streaming records (latest cycle from {latest_ts}): {df_silver.count()}")
 df_silver.groupBy("event_type").count().show()
 
 # COMMAND ----------
