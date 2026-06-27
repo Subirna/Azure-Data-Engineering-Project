@@ -1,7 +1,3 @@
-# Presentation Script — 20 Minutes
-## Speak naturally, don't read word-by-word. Use this as a guide.
-
----
 
 ## SLIDE 1: Title (30 seconds)
 
