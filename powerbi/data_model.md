@@ -515,3 +515,230 @@ Synapse: 8 SQL views (OPENROWSET)
         ▼
 Power BI: 1-page executive dashboard
 ```
+
+---
+
+## Streaming Source Data Model
+
+### Source: UK Carbon Intensity API
+**Base URL:** `https://api.carbonintensity.org.uk`
+
+```
+┌────────────────────────────────┐
+│  /intensity (National)          │
+│  (1 record every 30 min)        │
+├────────────────────────────────┤
+│  from          STRING           │── Period start (e.g. 2026-06-25T16:00Z)
+│  to            STRING           │── Period end (e.g. 2026-06-25T16:30Z)
+│  forecast      INT              │── Predicted CO2 (gCO2/kWh)
+│  actual        INT              │── Real CO2 (gCO2/kWh)
+│  index         STRING           │── very low / low / moderate / high / very high
+└────────────────────────────────┘
+
+┌────────────────────────────────┐
+│  /generation (National Mix)     │
+│  (9 records every 30 min)       │
+├────────────────────────────────┤
+│  from          STRING           │── Period start
+│  to            STRING           │── Period end
+│  fuel          STRING           │── gas/wind/solar/nuclear/coal/hydro/biomass/imports/other
+│  perc          DOUBLE           │── Percentage of total (e.g. 39.5%)
+└────────────────────────────────┘
+
+┌────────────────────────────────────────────┐
+│  /regional (17 UK Energy Regions)           │
+│  (17 intensity + 153 generation = 170       │
+│   records every 30 min)                     │
+├────────────────────────────────────────────┤
+│  regionid        INT            │── 1 to 17
+│  shortname       STRING         │── "North Scotland", "South Wales"...
+│  dnoregion       STRING         │── Distribution Network Operator name
+│  forecast        INT            │── Regional CO2 (gCO2/kWh)
+│  index           STRING         │── Regional intensity level
+│  generationmix[] ARRAY          │── 9 fuel types per region
+│    ├── fuel      STRING         │── gas/wind/solar...
+│    └── perc      DOUBLE         │── Percentage for this region
+└────────────────────────────────────────────┘
+```
+
+### 17 UK Energy Regions:
+```
+ 1. North Scotland          10. East England
+ 2. South Scotland          11. South West England
+ 3. North West England      12. South England
+ 4. North East England      13. London
+ 5. Yorkshire               14. South East England
+ 6. North Wales & Mersey    15. England (national)
+ 7. South Wales             16. GB (Great Britain)
+ 8. West Midlands           17. Scotland (national)
+ 9. East Midlands
+```
+
+---
+
+## Streaming Gold Tables — ER Diagram
+
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                    STREAMING GOLD TABLES (5 Tables)                              ║
+║                    All standalone — no relationships needed                       ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                  ║
+║  ┌──────────────────────────────────────────┐                                   ║
+║  │  gold_national_intensity                  │                                   ║
+║  │  (1 row per 30-min period)                │                                   ║
+║  │  Source: /intensity API                   │                                   ║
+║  │  dropDuplicates: [period_from]            │                                   ║
+║  ├──────────────────────────────────────────┤                                   ║
+║  │  data_timestamp      TIMESTAMP           │── When data was fetched            ║
+║  │  period_from         STRING              │── Measurement start               ║
+║  │  period_to           STRING              │── Measurement end                 ║
+║  │  forecast            DOUBLE              │── Predicted gCO2/kWh              ║
+║  │  actual              DOUBLE              │── Real gCO2/kWh                   ║
+║  │  intensity_index     STRING              │── API level (very low...very high) ║
+║  │  forecast_vs_actual  DOUBLE   [NEW]      │── actual - forecast               ║
+║  │  intensity_category  STRING   [NEW]      │── Classified from actual value     ║
+║  └──────────────────────────────────────────┘                                   ║
+║                                                                                  ║
+║  ┌──────────────────────────────────────────┐                                   ║
+║  │  gold_generation_mix                      │                                   ║
+║  │  (9 rows per 30-min period)               │                                   ║
+║  │  Source: /generation API                  │                                   ║
+║  │  dropDuplicates: [period_from, fuel_type] │                                   ║
+║  ├──────────────────────────────────────────┤                                   ║
+║  │  data_timestamp      TIMESTAMP           │── When fetched                    ║
+║  │  period_from         STRING              │── Period start                    ║
+║  │  period_to           STRING              │── Period end                      ║
+║  │  fuel_type           STRING              │── gas/wind/solar/nuclear/...      ║
+║  │  fuel_percentage     DOUBLE              │── % of total (e.g. 39.5%)        ║
+║  │  energy_category     STRING   [NEW]      │── Renewable/Fossil/Nuclear/Other  ║
+║  └──────────────────────────────────────────┘                                   ║
+║                                                                                  ║
+║  ┌──────────────────────────────────────────────┐                               ║
+║  │  gold_regional_intensity                      │                               ║
+║  │  (17 rows per 30-min period)                  │                               ║
+║  │  Source: /regional API (intensity part)        │                               ║
+║  │  dropDuplicates: [period_from, region_id]     │                               ║
+║  ├──────────────────────────────────────────────┤                               ║
+║  │  data_timestamp      TIMESTAMP               │── When fetched                ║
+║  │  period_from         STRING                  │── Period start                ║
+║  │  period_to           STRING                  │── Period end                  ║
+║  │  region_id           INT                     │── 1 to 17                     ║
+║  │  region_name         STRING                  │── "North Scotland"...         ║
+║  │  dno_region          STRING                  │── Distribution operator       ║
+║  │  forecast            DOUBLE                  │── Regional gCO2/kWh           ║
+║  │  intensity_index     STRING                  │── API level                   ║
+║  │  intensity_category  STRING       [NEW]      │── Classified from forecast    ║
+║  └──────────────────────────────────────────────┘                               ║
+║                                                                                  ║
+║  ┌──────────────────────────────────────────────────────┐                       ║
+║  │  gold_regional_generation                              │                       ║
+║  │  (153 rows per 30-min period = 17 regions × 9 fuels)   │                       ║
+║  │  Source: /regional API (generationmix part)            │                       ║
+║  │  dropDuplicates: [period_from, region_id, fuel_type]   │                       ║
+║  ├──────────────────────────────────────────────────────┤                       ║
+║  │  data_timestamp      TIMESTAMP                       │── When fetched        ║
+║  │  period_from         STRING                          │── Period start        ║
+║  │  region_id           INT                             │── 1 to 17            ║
+║  │  region_name         STRING                          │── Region name         ║
+║  │  fuel_type           STRING                          │── 9 fuel types        ║
+║  │  fuel_percentage     DOUBLE                          │── % for this region   ║
+║  │  energy_category     STRING           [NEW]          │── Renewable/Fossil/...║
+║  └──────────────────────────────────────────────────────┘                       ║
+║                                                                                  ║
+║  ┌──────────────────────────────────────────────────────┐                       ║
+║  │  gold_renewable_summary                                │                       ║
+║  │  (4 rows per 30-min period)                            │                       ║
+║  │  Source: Aggregated from generation_mix                 │                       ║
+║  │  dropDuplicates: [period_from, energy_category]        │                       ║
+║  ├──────────────────────────────────────────────────────┤                       ║
+║  │  period_from         STRING                          │── Period start        ║
+║  │  energy_category     STRING                          │── Renewable/Fossil/   ║
+║  │                                                      │   Nuclear/Other       ║
+║  │  total_percentage    DOUBLE                          │── SUM of fuel %       ║
+║  └──────────────────────────────────────────────────────┘                       ║
+║                                                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### Streaming Gold — Classification Logic ([NEW] columns):
+
+```
+energy_category:                      intensity_category:
+  wind/solar/hydro → "Renewable"        actual ≤ 50  → "Very Low"
+  gas/coal         → "Fossil Fuel"      actual ≤ 100 → "Low"
+  nuclear          → "Nuclear"          actual ≤ 200 → "Moderate"
+  biomass/imports/ → "Other"            actual ≤ 300 → "High"
+  other                                 actual > 300 → "Very High"
+
+forecast_vs_actual:
+  actual - forecast
+  Negative = GOOD (less CO2 than predicted)
+  Positive = BAD (more CO2 than predicted)
+```
+
+### How tables connect to each other (logical, not FK):
+
+```
+/intensity API          /generation API         /regional API
+     │                       │                       │
+     ▼                       ▼                       ├──────────────┐
+gold_national_          gold_generation_        gold_regional_   gold_regional_
+intensity               mix                     intensity        generation
+(1 row)                 (9 rows)                (17 rows)        (153 rows)
+                             │                                        │
+                             ▼                                        │
+                        gold_renewable_                               │
+                        summary                                       │
+                        (4 rows)                                      │
+                        Aggregates from                               │
+                        generation_mix                                │
+
+Linked by period_from (same time period) but NO formal relationships
+in Power BI — all standalone tables
+```
+
+### Streaming Data Flow:
+
+```
+Carbon Intensity API (every 30 min)
+        │
+        ▼
+Python Producer (sends ~180 events per cycle)
+        │
+        ├── 1 national_intensity event
+        ├── 9 generation_mix events
+        ├── 17 regional_intensity events
+        └── 153 regional_generation events
+        │
+        ▼
+Azure Event Hub (temporary buffer — 1 hour retention)
+        │
+        ▼
+Databricks Consumer (reads from Event Hub)
+        │
+        ▼
+ADLS Bronze: streaming/carbon_intensity/raw/ (append — permanent)
+        │
+        ▼
+ADLS Silver: streaming/carbon_intensity/ (latest cycle only)
+        │
+        ▼
+ADLS Gold: streaming/ (5 tables)
+        ├── gold_national_intensity/
+        ├── gold_generation_mix/
+        ├── gold_regional_intensity/
+        ├── gold_regional_generation/
+        └── gold_renewable_summary/
+        │
+        ▼
+Synapse: 5 SQL views (OPENROWSET)
+        ├── vw_stream_national_intensity
+        ├── vw_stream_generation_mix
+        ├── vw_stream_regional_intensity
+        ├── vw_stream_regional_generation
+        └── vw_stream_renewable_summary
+        │
+        ▼
+Power BI: Streaming Dashboard
+```
