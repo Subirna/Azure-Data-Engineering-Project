@@ -1,7 +1,8 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 09 - Register Streaming Tables in Unity Catalog
-# MAGIC Registers streaming Gold tables in Unity Catalog.
+# MAGIC # 09 - Register Streaming External Tables in Unity Catalog
+# MAGIC Creates External Tables pointing to ADLS streaming Gold Parquet files.
+# MAGIC Data stays in ADLS — catalog only has pointers.
 # MAGIC Run AFTER streaming Gold transformation completes.
 
 # COMMAND ----------
@@ -29,7 +30,7 @@ print("Schema created: subirna_streaming")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Register Streaming Gold Tables
+# MAGIC ## Register Streaming External Tables
 
 # COMMAND ----------
 
@@ -41,30 +42,37 @@ streaming_tables = {
     "gold_renewable_summary": f"{GOLD_PATH}/streaming/gold_renewable_summary/"
 }
 
-print("=== STREAMING LAYER ===")
+print("=== STREAMING LAYER (External Tables) ===")
 for table_name, path in streaming_tables.items():
-    df = spark.read.parquet(path)
-    df.write.mode("overwrite").saveAsTable(f"subirna_streaming.{table_name}")
-    print(f"✅ subirna_streaming.{table_name} ({df.count()} rows)")
+    spark.sql(f"DROP TABLE IF EXISTS subirna_streaming.{table_name}")
+    spark.sql(f"""
+        CREATE TABLE subirna_streaming.{table_name}
+        USING PARQUET
+        LOCATION '{path}'
+    """)
+    count = spark.table(f"subirna_streaming.{table_name}").count()
+    print(f"✅ subirna_streaming.{table_name} ({count} rows) → {path}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Verify Streaming Tables
+# MAGIC ## Verify Streaming External Tables
 
 # COMMAND ----------
 
 print("=" * 60)
-print("STREAMING UNITY CATALOG — COMPLETE")
+print("STREAMING EXTERNAL TABLES — COMPLETE")
 print("=" * 60)
 
 tables = spark.sql("SHOW TABLES IN subirna_streaming").collect()
 print(f"\n📁 subirna_streaming ({len(tables)} tables):")
 for table in tables:
     count = spark.table(f"subirna_streaming.{table.tableName}").count()
-    print(f"   📄 {table.tableName}: {count} rows")
+    tbl_type = spark.sql(f"DESCRIBE EXTENDED subirna_streaming.{table.tableName}").filter("col_name = 'Type'").collect()
+    type_str = tbl_type[0][1] if tbl_type else "unknown"
+    print(f"   📄 {table.tableName}: {count} rows | Type: {type_str}")
 
-print("\n=== TEST QUERIES ===")
+print("\n=== SAMPLE QUERIES ===")
 
 print("\nGeneration Mix:")
 spark.sql("""
@@ -73,10 +81,17 @@ spark.sql("""
     ORDER BY fuel_percentage DESC
 """).show()
 
-print("\nRegional Intensity:")
+print("\nRegional Intensity (Top 5 highest):")
 spark.sql("""
     SELECT region_name, forecast, intensity_index
     FROM subirna_streaming.gold_regional_intensity
     ORDER BY forecast DESC
     LIMIT 5
+""").show()
+
+print("\nRenewable Summary:")
+spark.sql("""
+    SELECT energy_category, total_percentage
+    FROM subirna_streaming.gold_renewable_summary
+    ORDER BY total_percentage DESC
 """).show()

@@ -1,7 +1,8 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 08 - Register Batch Tables in Unity Catalog
-# MAGIC Registers Bronze, Silver, and Gold batch tables in Unity Catalog.
+# MAGIC # 08 - Register Batch External Tables in Unity Catalog
+# MAGIC Creates External Tables pointing to ADLS Parquet files for all layers.
+# MAGIC Data stays in ADLS — catalog only has pointers.
 # MAGIC Run AFTER Gold transformation completes.
 
 # COMMAND ----------
@@ -33,7 +34,7 @@ print("Schemas created: subirna_bronze, subirna_silver, subirna_gold")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Register Bronze Tables (Raw Data)
+# MAGIC ## Register Bronze External Tables (Raw Data)
 
 # COMMAND ----------
 
@@ -44,16 +45,21 @@ bronze_tables = {
     "count_points_clean": f"{BRONZE_PATH}/count_points_clean/"
 }
 
-print("=== BRONZE LAYER ===")
+print("=== BRONZE LAYER (External Tables) ===")
 for table_name, path in bronze_tables.items():
-    df = spark.read.parquet(path)
-    df.write.mode("overwrite").saveAsTable(f"subirna_bronze.{table_name}")
-    print(f"✅ subirna_bronze.{table_name} ({df.count()} rows)")
+    spark.sql(f"DROP TABLE IF EXISTS subirna_bronze.{table_name}")
+    spark.sql(f"""
+        CREATE TABLE subirna_bronze.{table_name}
+        USING PARQUET
+        LOCATION '{path}'
+    """)
+    count = spark.table(f"subirna_bronze.{table_name}").count()
+    print(f"✅ subirna_bronze.{table_name} ({count} rows) → {path}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Register Silver Tables (Cleansed Data)
+# MAGIC ## Register Silver External Tables (Cleansed Data)
 
 # COMMAND ----------
 
@@ -64,16 +70,21 @@ silver_tables = {
     "count_points": f"{SILVER_PATH}/count_points/"
 }
 
-print("=== SILVER LAYER ===")
+print("=== SILVER LAYER (External Tables) ===")
 for table_name, path in silver_tables.items():
-    df = spark.read.parquet(path)
-    df.write.mode("overwrite").saveAsTable(f"subirna_silver.{table_name}")
-    print(f"✅ subirna_silver.{table_name} ({df.count()} rows)")
+    spark.sql(f"DROP TABLE IF EXISTS subirna_silver.{table_name}")
+    spark.sql(f"""
+        CREATE TABLE subirna_silver.{table_name}
+        USING PARQUET
+        LOCATION '{path}'
+    """)
+    count = spark.table(f"subirna_silver.{table_name}").count()
+    print(f"✅ subirna_silver.{table_name} ({count} rows) → {path}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Register Gold Tables (Business Ready)
+# MAGIC ## Register Gold External Tables (Business Ready)
 
 # COMMAND ----------
 
@@ -88,21 +99,26 @@ gold_tables = {
     "dim_date": f"{GOLD_PATH}/dim_date/"
 }
 
-print("=== GOLD LAYER ===")
+print("=== GOLD LAYER (External Tables) ===")
 for table_name, path in gold_tables.items():
-    df = spark.read.parquet(path)
-    df.write.mode("overwrite").saveAsTable(f"subirna_gold.{table_name}")
-    print(f"✅ subirna_gold.{table_name} ({df.count()} rows)")
+    spark.sql(f"DROP TABLE IF EXISTS subirna_gold.{table_name}")
+    spark.sql(f"""
+        CREATE TABLE subirna_gold.{table_name}
+        USING PARQUET
+        LOCATION '{path}'
+    """)
+    count = spark.table(f"subirna_gold.{table_name}").count()
+    print(f"✅ subirna_gold.{table_name} ({count} rows) → {path}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Verify All Batch Tables
+# MAGIC ## Verify All Batch External Tables
 
 # COMMAND ----------
 
 print("=" * 60)
-print("BATCH UNITY CATALOG — COMPLETE")
+print("BATCH EXTERNAL TABLES — COMPLETE")
 print("=" * 60)
 
 for schema in ["subirna_bronze", "subirna_silver", "subirna_gold"]:
@@ -110,19 +126,19 @@ for schema in ["subirna_bronze", "subirna_silver", "subirna_gold"]:
     print(f"\n📁 {schema} ({len(tables)} tables):")
     for table in tables:
         count = spark.table(f"{schema}.{table.tableName}").count()
-        print(f"   📄 {table.tableName}: {count} rows")
+        tbl_type = spark.sql(f"DESCRIBE EXTENDED {schema}.{table.tableName}").filter("col_name = 'Type'").collect()
+        type_str = tbl_type[0][1] if tbl_type else "unknown"
+        print(f"   📄 {table.tableName}: {count} rows | Type: {type_str}")
 
-print("\n=== TEST QUERIES ===")
-
-print("\nBronze → Silver → Gold progression:")
+print("\n=== DATA LINEAGE ===")
 bronze_count = spark.table("subirna_bronze.counts_clean").count()
 silver_count = spark.table("subirna_silver.counts").count()
 gold_count = spark.table("subirna_gold.fact_traffic_summary").count()
-print(f"  Bronze: {bronze_count} rows (raw)")
-print(f"  Silver: {silver_count} rows (cleansed)")
-print(f"  Gold:   {gold_count} rows (aggregated)")
+print(f"  Bronze: {bronze_count} rows (raw strings from API)")
+print(f"  Silver: {silver_count} rows (typed, validated, derived columns)")
+print(f"  Gold:   {gold_count} rows (aggregated by region, year)")
 
-print("\nGold sample:")
+print("\n=== SAMPLE QUERY ===")
 spark.sql("""
     SELECT region_name, year, total_all_vehicles, yoy_change_pct
     FROM subirna_gold.fact_traffic_summary
