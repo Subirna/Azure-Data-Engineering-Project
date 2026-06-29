@@ -14,7 +14,7 @@
 
 # Storage config
 storage_account = "subiradls2026"
-storage_key = "<PASTE_KEY_FROM_AZURE_PORTAL: subiradls2026 > Security + networking > Access keys > key1>"
+storage_key = dbutils.secrets.get(scope="uk-traffic-vault", key="subiadls-account-key")
 
 spark.conf.set(
     f"fs.azure.account.key.{storage_account}.dfs.core.windows.net",
@@ -22,7 +22,7 @@ spark.conf.set(
 )
 
 # Event Hub config
-EVENT_HUB_CONNECTION_STRING = "<PASTE_EVENT_HUB_CONNECTION_STRING>"
+EVENT_HUB_CONNECTION_STRING = dbutils.secrets.get(scope="uk-traffic-vault", key="subieventhub-connection-string")
 EVENT_HUB_NAME = "carbon-intensity-stream"
 
 BRONZE_PATH = f"abfss://bronze@{storage_account}.dfs.core.windows.net/streaming/carbon_intensity"

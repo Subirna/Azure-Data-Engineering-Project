@@ -7,7 +7,7 @@
 # COMMAND ----------
 
 storage_account = "subiradls2026"
-storage_key = dbutils.widgets.get("storage_key") if "storage_key" in [w.name for w in dbutils.widgets.getAll()] else "<PASTE_YOUR_KEY_IN_DATABRICKS>"
+storage_key = dbutils.secrets.get(scope="uk-traffic-vault", key="subiadls-account-key")
 
 spark.conf.set(
     f"fs.azure.account.key.{storage_account}.dfs.core.windows.net",

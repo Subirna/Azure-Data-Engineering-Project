@@ -18,7 +18,7 @@ import requests
 from azure.eventhub import EventHubProducerClient, EventData
 from datetime import datetime
 
-EVENT_HUB_CONNECTION_STRING = "<PASTE_EVENT_HUB_CONNECTION_STRING>"
+EVENT_HUB_CONNECTION_STRING = dbutils.secrets.get(scope="uk-traffic-vault", key="subieventhub-connection-string")
 EVENT_HUB_NAME = "carbon-intensity-stream"
 
 NATIONAL_URL = "https://api.carbonintensity.org.uk/intensity"
